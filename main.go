@@ -175,6 +175,76 @@ func roots(p Poly) []Gf256 {
 	return r
 }
 
+/*
+The main idea of Berlekamp-Massey algorithm is to iteratively build
+a recurrence of minimal length for larger and larger prefixes of the sequence,
+given the previous step solution and the last failed recurrence of smaller
+order along with its failure position.
+
+Let's define discrepancy D, that takes in recurrence coefficients
+c = (c_0, ..., c_m) along with an index j and evaluates the recurrence on
+the sequence values (s_j-m, ..., s_j): D(c, j) = ∑[i=0..m] c_i*s_j-i.
+We say that c generates (s_0, ..., s_k) if D(c, j) = 0 for all j = m..k.
+
+It is useful to note that minimal recurrence order is a monotonic non-decreasing
+function of the prefix length, i.e.
+
+	ord(slr(s_0, ..., s_k)) <= ord(slr(s_0, ..., s_k, ..., s_k+n)).
+
+This follows from the fact that a recurrence generating a longer prefix also
+must generate all shorter prefixes.
+
+Suppose that c is the shortest linear recurrence for (s_0, ..., s_k),
+and b is the previous minimal order recurrence that failed on index i.
+I.e. we assume there is no e such that ord(e) < ord(c) and e generates
+(s_0, ..., s_j) for some j from i..k.
+
+Let's consider the symbol s_k+1. If D(c, k+1) = 0, then c is also the shortest
+recurrence for (s_0, ..., s_k, s_k+1).
+But what if the discrepancy D(c, k+1) = d_c, d_c != 0? Then we must "fix" c.
+
+	         (b_0 ... b_n) -> D(b, i) = d_b
+	           .-------.
+	           v       v    s_k+1       This scheme is rather a simple visual aid,
+	* .. *  *  *  * .. *  ..  * .. *    b and c may not always overlap like this
+	                ^ s_i     ^
+	                '---------'
+	               (c_0 ... c_m) -> D(c, k+1) = d_c
+
+We can scale b by -d_c/d_b and add these shifted recurrences column-by-column.
+The combined recurrence y must generate the prefix (s_0, ..., s_k+1).
+
+If the left b pointer is greater or equal to the c left pointer,
+ord(y) = ord(c) and we're done. But if not, ord(y) > ord(c), and we're left
+with the question "could there be a shorter recurrence q?".
+
+	                             s_i                  s_k+1
+	                              |                     |
+	                              v                     v
+
+	(b_n  .......... b_m-t-1 ... b_0)<-------- t -------->
+	 <--- n+t-m --->(c_m     ... c_t c_t-1 ........... c_0)
+
+	(y_n+t ..... y_p ................................. y_0)
+	            (q_p ................................. q_0)  m < p < n+t
+
+Both q and c fit (s_0, ..., s_k), so we can scale c by -q_0/c_0 and add to q.
+That gives us recurrence q' of order p-1 that generates (s_0, ..., s_k-1).
+We can do p-m+1 such subtractions and get a recurrence q* of order m-1
+that fits (s_0, ..., s_j) where j = k-p+m-1.
+
+	                        p < n+t                  m > n
+	                          |                        |
+	                          v                        v
+	j = k-p+m-1 = i+t-1-p+m-1 >= i+t-n-t+m-1 = i+m-n-1 >= i
+
+That means we've found a recurrence q* for the prefix (s_0, ..., s_j),
+where ord(q*) < ord(c) and i <= j < k, but we assumed that such a recurrence doesn't exist.
+
+This is rather an incomplete sketch of the induction step proof, but it gives enough of
+an idea about how and why this algorithm works.
+*/
+
 func combine(C []Gf256, B []Gf256, c Gf256, m int) []Gf256 {
 	C = C[:max(len(B)+m, len(C))]
 	for i := range B {
@@ -184,7 +254,6 @@ func combine(C []Gf256, B []Gf256, c Gf256, m int) []Gf256 {
 	return C
 }
 
-// shortest linear recurrence via Berlekamp-Massey
 func slr(s []Gf256) []Gf256 {
 	C := make([]Gf256, 1, len(s)+1)
 	B := make([]Gf256, 1, len(s)+1)
@@ -366,7 +435,7 @@ and then sum over k,
 
 So we know that coefficients of L(x) give the linear recurrence formula for syndromes.
 Berlekamp-Massey algorithm comes to help here, it can find the minimal recurrence that
-satisfies a series of values. But how can we be sure that it's output will be L?
+satisfies a series of values. But how can we be sure that its output will be L?
 
 Suppose that Berlekamp-Massey gives us back G(x) = 1 + G_1*x + ... +G_m*x^m, such that
 
