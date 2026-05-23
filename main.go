@@ -391,20 +391,31 @@ This polynomial has two important properties:
 Coefficients of c(x) are the codeword to be transmitted.
 */
 
+func reverse[T any](s []T) []T {
+	n := len(s)
+	for i := 0; i < n/2; i++ {
+		s[i], s[n-1-i] = s[n-1-i], s[i]
+	}
+	return s
+}
+
+// TODO: figure out how to do data processing to minimize the amount of
+// copying/allocations/memory accesses. Would it be better to make polynomials
+// big endian?
+
 func encode(data []byte, k int) []byte {
-	// FIXME: fix byte order
 	if k <= 0 || k > MaxEcc || k+len(data) > 255 || len(data) == 0 {
 		return nil
 	}
 	p := make(Poly, len(data)+k)
 	for i, v := range data {
-		p[i+k] = v
+		p[len(p)-1-i] = v
 	}
 	_, r := pdiv(p, gtab[k])
 	for i, v := range r {
 		p[i] = v
 	}
-	return p
+	return reverse(p)
 }
 
 /*
@@ -471,17 +482,18 @@ Therefore given at least 2*v syndromes, the Berlekamp-Massey will correctly
 find the error locator polynomial of v errors.
 */
 
-func syndromes(p Poly, k int) []Gf256 {
-	s := make([]Gf256, 0, k)
-	c := make([]Gf256, len(p))
-	copy(c, p)
+func syndromes(code []Gf256, k int) []Gf256 {
+	s := make([]Gf256, k)
+	c := make([]Gf256, len(code))
+	copy(c, code)
+	c = reverse(c)
 	for i := 0; i < k; i++ {
 		v := Gf256(0)
 		for j := range c {
 			v = add(v, c[j])
 			c[j] = mul(c[j], pow[j])
 		}
-		s = append(s, v)
+		s[i] = v
 	}
 	return s
 }
@@ -495,21 +507,31 @@ func zero(s []Gf256) bool {
 	return true
 }
 
-func erasures(lost []byte) Poly {
+func erasures(lost []byte, n int) Poly {
 	g := Poly{1}
 	for _, v := range lost {
-		g = pmul(g, Poly{1, pow[v]})
+		if int(v) >= n {
+			return nil
+		}
+		g = pmul(g, Poly{1, pow[n-1-int(v)]})
 	}
 	return g
 }
+
+// TODO: clean up
 
 func decode(code []byte, k int, lost []byte) []byte {
 	if k <= 0 || k > MaxEcc || len(code) > 255 || len(code) <= k || len(lost) > k {
 		return nil
 	}
+	p := make([]Gf256, len(code)-k)
+	copy(p, code)
 	S := syndromes(code, k)
 	if len(lost) > 0 || !zero(S) {
-		L := erasures(lost)
+		L := erasures(lost, len(code))
+		if L == nil {
+			return nil
+		}
 		T := pmul(S, L)[len(lost):len(S)]
 		if !zero(T) {
 			l := slr(T)
@@ -525,25 +547,30 @@ func decode(code []byte, k int, lost []byte) []byte {
 		O := pmul(L, S)[:len(S)]
 		Ld := fddx(L)
 		for _, v := range r {
-			vi := inv(v)
-			loc := log[vi]
-			if int(loc) >= len(code) {
+			u := inv(v)
+			i := int(log[u])
+			if i >= len(code) {
 				return nil
 			}
-			err := div(mul(vi, peval(O, v)), peval(Ld, v))
-			code[loc] = sub(code[loc], err)
+			if i >= k {
+				err := div(mul(u, peval(O, v)), peval(Ld, v))
+				p[len(p)-1-i+k] = sub(p[len(p)-1-i+k], err)
+			}
 		}
 	}
-	return code[k:]
+	return p
 }
 
 func main() {
 	data := []byte("Hello, world")
-	fmt.Println(data)
+	fmt.Printf("data: %v (%v)\n", data, string(data))
 	ecc := 3
 	code := encode(data, ecc)
+	fmt.Println("send:", code)
 	code[3] ^= 123
 	code[5] ^= 123
 	lost := []byte{5}
-	fmt.Println(decode(code, ecc, lost))
+	fmt.Println("recv:", code)
+	done := decode(code, ecc, lost)
+	fmt.Printf("done: %v (%v)\n", done, string(done))
 }
