@@ -81,7 +81,7 @@ func mul(x, y Gf256) Gf256 {
 
 func inv(x Gf256) Gf256 {
 	if x == 0 {
-		panic(0)
+		panic("zero division")
 	}
 	return pow[(255-log[x])%255]
 }
@@ -117,27 +117,52 @@ func pmul(a, b Poly) Poly {
 func pdiv(a, b Poly) (Poly, Poly) {
 	b = pnorm(b)
 	if len(b) == 0 {
-		panic(0)
+		panic("zero division")
 	}
 	a = pnorm(a)
-	if len(a) < len(b) {
-		return nil, a
-	}
 	apow, bpow := len(a)-1, len(b)-1
-	r := make(Poly, apow+1)
-	copy(r, a)
-	q := make(Poly, apow-bpow+1)
+	qr := make(Poly, apow+1)
+	copy(qr, a)
 	for i := apow; i >= bpow; i-- {
-		if r[i] != 0 {
-			c := div(r[i], b[bpow])
+		c := div(qr[i], b[bpow])
+		if c != 0 {
 			for j, u := range b {
 				k := i - bpow + j
-				r[k] = sub(r[k], mul(u, c))
+				qr[k] = sub(qr[k], mul(u, c))
 			}
-			q[i-bpow] = c
+		}
+		qr[i] = c
+	}
+	return qr[bpow:], pnorm(qr[:bpow])
+}
+
+func pmod(a, b Poly) Poly {
+	b = pnorm(b)
+	if len(b) == 0 {
+		panic("zero division")
+	}
+	a = pnorm(a)
+	r := make(Poly, min(len(a), len(b)))
+	if len(a) < len(b) {
+		copy(r, a)
+		return r
+	}
+	copy(r, a[len(a)-len(b):])
+	bpow := len(b)-1
+	for i := len(a)-len(b); i > 0; i-- {
+		c := div(r[bpow], b[bpow])
+		for j := bpow; j > 0; j-- {
+			r[j] = sub(r[j-1], mul(c, b[j-1]))
+		}
+		r[0] = a[i-1]
+	}
+	if r[bpow] != 0 {
+		c := div(r[bpow], b[bpow])
+		for j := 0; j <= bpow; j++ {
+			r[j] = sub(r[j], mul(c, b[j]))
 		}
 	}
-	return q, pnorm(r)
+	return pnorm(r)
 }
 
 func peval(p Poly, x Gf256) Gf256 {
@@ -399,9 +424,7 @@ func reverse[T any](s []T) []T {
 	return s
 }
 
-// TODO: figure out how to do data processing to minimize the amount of
-// copying/allocations/memory accesses. Would it be better to make polynomials
-// big endian?
+// TODO:  Would it be better to make polynomials big endian?
 
 func encode(data []byte, k int) []byte {
 	if k <= 0 || k > MaxEcc || k+len(data) > 255 || len(data) == 0 {
@@ -411,7 +434,7 @@ func encode(data []byte, k int) []byte {
 	for i, v := range data {
 		p[len(p)-1-i] = v
 	}
-	_, r := pdiv(p, gtab[k])
+	r := pmod(p, gtab[k])
 	for i, v := range r {
 		p[i] = v
 	}
