@@ -476,9 +476,9 @@ Suppose that Berlekamp-Massey gives us back G(x) = 1 + G_1*x + ... +G_m*x^m, suc
 	S_j+m + G_1*S_j+m-1 + ... + G_m*S_j = 0.
 
 It's obvious that G cannot be longer than L, since the algorithm produces the minimal
-recurrence. But can it be shorter?
+recurrence. But can it be shorter or of the same length?
 
-By expanding S terms we get (for any i > m):
+By expanding S terms we get (for any i >= m):
 
 	∑[j=0..m]G_j*S_i-j =
 	∑[j=0..m]G_j*(∑[k=1..v]Y_k*X_k^i-j) =
@@ -487,12 +487,12 @@ By expanding S terms we get (for any i > m):
 	∑[k=1..v](Y_k*X_k^i*∑[j=0..m]G_j*X_k^-j) =
 	∑[k=1..v](Y_k*X_k^i*G(X_k^-1)) = 0
 
-If we have enough syndromes, we can range i over {v+1, ..., v+v} and get the following
+If we have enough syndromes, we can range i over {v, ..., 2v-1} and get the following
 system of equations:
 
-	/ X_1^v+1 X_2^v+1 ... X_v^v+1 \ / Y_1*G(X_1^-1) \
-	|              ...            | |      ...      | = 0
-	\ X_1^v+v X_2^v+v ... X_v^v+v / \ Y_v*G(X_v^-1) /
+	/ 1        1        ... 1     \ / X_1^v*Y_1*G(X_1^-1) \
+	|             ...             | |         ...         | = 0
+	\ X_1^v-1 X_2^v-1 ... X_v^v-1 / \ X_v^v*Y_v*G(X_v^-1) /
 
 The equation matrix is a Vandermonde matrix (which is invertible since X_k are distinct),
 so given that Y_k != 0 it must be that G(X_k^-1) = 0. This means that G has at least v roots
