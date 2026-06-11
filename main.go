@@ -207,13 +207,13 @@ Let's consider the symbol s_k+1. If D(c, k+1) = 0, then c is also the shortest
 recurrence for (s_0, ..., s_k, s_k+1).
 But what if the discrepancy D(c, k+1) = d_c, d_c != 0? Then we must "fix" c.
 
-	         (b_0 ... b_n) -> D(b, i) = d_b
+	         (b_n ... b_0) -> D(b, i) = d_b
 	           .-------.
 	           v       v    s_k+1       This scheme is rather a simple visual aid,
 	* .. *  *  *  * .. *  ..  * .. *    b and c may not always overlap like this
 	                ^ s_i     ^
 	                '---------'
-	               (c_0 ... c_m) -> D(c, k+1) = d_c
+	               (c_m ... c_0) -> D(c, k+1) = d_c
 
 We can scale b by -d_c/d_b and add these shifted recurrences column-by-column.
 The combined recurrence y must generate the prefix (s_0, ..., s_k+1).
@@ -222,15 +222,15 @@ If the left b pointer is greater or equal to the c left pointer,
 ord(y) = ord(c) and we're done. But if not, ord(y) > ord(c), and we're left
 with the question "could there be a shorter recurrence q?".
 
-	                             s_i                  s_k+1
-	                              |                     |
-	                              v                     v
+	                           s_i                  s_k+1
+	                            |                     |
+	                            v                     v
 
-	(b_n  .......... b_m-t-1 ... b_0)<-------- t -------->
-	 <--- n+t-m --->(c_m     ... c_t c_t-1 ........... c_0)
+	(b_n  .......... b_m-t ... b_0)<-------- t -------->
+	 <--- n+t-m --->(c_m   ... c_t c_t-1 ........... c_0)
 
-	(y_n+t ..... y_p ................................. y_0)
-	            (q_p ................................. q_0)  m < p < n+t
+	(y_n+t ..... y_p ............................... y_0)
+	            (q_p ............................... q_0)  m <= p < n+t
 
 Both q and c fit (s_0, ..., s_k), so we can scale c by -q_0/c_0 and add to q.
 That gives us recurrence q' of order p-1 that generates (s_0, ..., s_k-1).
